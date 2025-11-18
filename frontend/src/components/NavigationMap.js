@@ -1,7 +1,7 @@
 import { useState, useRef } from "react";
 import axios from "axios";
 import VoiceAssistant from "./VoiceAssistant";
-import OpenLayersMap from "./OpenLayersMap";
+import LeafletMap from "./LeafletMap";
 import "leaflet/dist/leaflet.css";
 
 export default function NavigationMap() {
@@ -133,7 +133,7 @@ export default function NavigationMap() {
       <div className="map-wrapper">
         {loadingRoute && <div className="map-loader">Updating route…</div>}
         <div className="primary-map" style={{ height: 520 }}>
-          <OpenLayersMap position={position} route={route} onMapReady={(m) => (mapRef.current = m)} />
+          <LeafletMap position={position} route={route} onMapReady={(m) => (mapRef.current = m)} />
         </div>
       </div>
 
