@@ -4,7 +4,6 @@ const dotenv = require("dotenv");
 dotenv.config();
 
 const routeController = require("./routes/routeController");
-const testController = require("./routes/testController");
 
 const app = express();
 app.use(cors());
@@ -16,7 +15,6 @@ app.get("/", (req, res) => {
 });
 
 app.use("/api/route", routeController);
-app.use("/api/test", testController);
 
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {

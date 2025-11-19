@@ -1,6 +1,23 @@
-// API Keys (Replace with your actual keys)
-const OPENCAGE_API_KEY = 'YOUR_KEY';
-const OPENTRIPMAP_API_KEY = 'YOUR_KEY';
+// API Keys - loaded from config.js or window.API_CONFIG
+// If config.js is not loaded, use defaults (will show error)
+const OPENCAGE_API_KEY = (window.API_CONFIG && window.API_CONFIG.OPENCAGE_API_KEY) || 'YOUR_KEY';
+const OPENTRIPMAP_API_KEY = (window.API_CONFIG && window.API_CONFIG.OPENTRIPMAP_API_KEY) || 'YOUR_KEY';
+
+// Validate API key on load
+function validateApiKeys() {
+    const isValid = OPENCAGE_API_KEY && OPENCAGE_API_KEY !== 'YOUR_KEY' && OPENCAGE_API_KEY.trim() !== '';
+    if (!isValid) {
+        console.error('⚠️ OpenCage API Key not configured!');
+        console.log('To fix:');
+        console.log('1. Set window.OPENCAGE_API_KEY in your HTML before app.js loads');
+        console.log('2. Or set localStorage.setItem("OPENCAGE_API_KEY", "your-key-here")');
+        console.log('3. Or update config.js with your actual API key');
+        console.log('Get your API key from: https://opencagedata.com/api');
+    } else {
+        console.log('✅ OpenCage API Key loaded:', OPENCAGE_API_KEY.substring(0, 10) + '...');
+    }
+    return isValid;
+}
 
 // Configuration
 const DEFAULT_CENTER = [13.0827, 80.2707]; // Chennai
@@ -76,24 +93,109 @@ function listen(onResult) {
 // --- Geocoding (OpenCage) ---
 
 async function geocode(query) {
-    try {
-        console.log(`Geocoding: ${query}`);
-        const url = `https://api.opencagedata.com/geocode/v1/json?q=${encodeURIComponent(query)}&key=${OPENCAGE_API_KEY}&limit=1`;
-        const res = await fetch(url);
-        const data = await res.json();
+    // Validate API key first
+    if (!OPENCAGE_API_KEY || OPENCAGE_API_KEY === 'YOUR_KEY' || OPENCAGE_API_KEY.trim() === '') {
+        console.error('❌ OpenCage API Key is not configured!');
+        console.log('Please set your API key in config.js or via localStorage');
+        return null;
+    }
 
-        if (data.status && data.status.code !== 200) {
-            console.error("OpenCage API Error:", data.status.message);
+    // Validate query
+    if (!query || typeof query !== 'string' || query.trim() === '') {
+        console.error('❌ Invalid geocoding query:', query);
+        return null;
+    }
+
+    const cleanQuery = query.trim();
+    console.log(`\n🔍 [GEOCODE] Starting geocoding for: "${cleanQuery}"`);
+
+    try {
+        // Build URL with proper encoding
+        const encodedQuery = encodeURIComponent(cleanQuery);
+        const url = `https://api.opencagedata.com/geocode/v1/json?q=${encodedQuery}&key=${OPENCAGE_API_KEY}&limit=1`;
+        
+        console.log('📡 [GEOCODE] API Request URL:', url);
+        console.log('🔑 [GEOCODE] API Key (first 10 chars):', OPENCAGE_API_KEY.substring(0, 10) + '...');
+
+        // Make request
+        const res = await fetch(url);
+        
+        // Check HTTP status
+        if (!res.ok) {
+            console.error(`❌ [GEOCODE] HTTP Error: ${res.status} ${res.statusText}`);
+            const errorText = await res.text();
+            console.error('❌ [GEOCODE] Error Response:', errorText);
             return null;
         }
 
-        if (data.results && data.results.length > 0) {
-            return data.results[0].geometry; // { lat, lng }
+        // Parse JSON response
+        const data = await res.json();
+        
+        // Log full response for debugging
+        console.log('📥 [GEOCODE] Full API Response:', JSON.stringify(data, null, 2));
+
+        // Check API status code
+        if (data.status) {
+            if (data.status.code !== 200) {
+                console.error(`❌ [GEOCODE] OpenCage API Error Code: ${data.status.code}`);
+                console.error(`❌ [GEOCODE] Error Message: ${data.status.message}`);
+                
+                // Specific error messages
+                if (data.status.code === 401 || data.status.code === 403) {
+                    console.error('🔑 [GEOCODE] Authentication failed! Check your API key.');
+                } else if (data.status.code === 402) {
+                    console.error('💳 [GEOCODE] Quota exceeded! Check your API usage.');
+                } else if (data.status.code === 429) {
+                    console.error('⏱️ [GEOCODE] Rate limit exceeded! Slow down your requests.');
+                }
+                return null;
+            }
+            console.log('✅ [GEOCODE] API Status Code: 200 (Success)');
         }
-        console.warn("OpenCage: No results found for query:", query);
-        return null;
+
+        // Check if results exist
+        if (!data.results) {
+            console.warn('⚠️ [GEOCODE] No "results" field in response');
+            return null;
+        }
+
+        if (data.results.length === 0) {
+            console.warn(`⚠️ [GEOCODE] No results found for query: "${cleanQuery}"`);
+            console.log('💡 [GEOCODE] Try a more specific location name or check spelling');
+            return null;
+        }
+
+        // Extract coordinates
+        const result = data.results[0];
+        console.log('📍 [GEOCODE] Best Match:', result.formatted || result.formatted_address || cleanQuery);
+        
+        if (!result.geometry) {
+            console.error('❌ [GEOCODE] No geometry in result:', result);
+            return null;
+        }
+
+        const { lat, lng } = result.geometry;
+        
+        // Validate coordinates
+        if (typeof lat !== 'number' || typeof lng !== 'number' || 
+            isNaN(lat) || isNaN(lng) ||
+            lat < -90 || lat > 90 || lng < -180 || lng > 180) {
+            console.error('❌ [GEOCODE] Invalid coordinates:', { lat, lng });
+            return null;
+        }
+
+        const coords = { lat: parseFloat(lat), lng: parseFloat(lng) };
+        console.log(`✅ [GEOCODE] Success! Coordinates: [${coords.lat}, ${coords.lng}]`);
+        
+        return coords;
+
     } catch (err) {
-        console.error("Geocoding network error:", err);
+        console.error('❌ [GEOCODE] Network/Parse Error:', err);
+        console.error('❌ [GEOCODE] Error Details:', {
+            name: err.name,
+            message: err.message,
+            stack: err.stack
+        });
         return null;
     }
 }
@@ -101,11 +203,42 @@ async function geocode(query) {
 // --- Routing (Leaflet Routing Machine) ---
 
 function calculateRoute(start, end) {
+    console.log('\n🚗 [ROUTING] Calculating route...');
+    console.log('📍 [ROUTING] Start:', start);
+    console.log('📍 [ROUTING] End:', end);
+    
+    // Validate coordinates
+    if (!start || !end) {
+        console.error('❌ [ROUTING] Missing start or end coordinates');
+        return;
+    }
+    
+    if (!start.lat || !start.lng || !end.lat || !end.lng) {
+        console.error('❌ [ROUTING] Invalid coordinates structure');
+        console.error('Expected: { lat: number, lng: number }');
+        return;
+    }
+    
+    // Validate coordinate values
+    if (isNaN(start.lat) || isNaN(start.lng) || isNaN(end.lat) || isNaN(end.lng)) {
+        console.error('❌ [ROUTING] Coordinates contain NaN values');
+        return;
+    }
+    
+    if (!map) {
+        console.error('❌ [ROUTING] Map not initialized');
+        return;
+    }
+
+    // Remove existing routing control
     if (routingControl) {
+        console.log('🗑️ [ROUTING] Removing existing route');
         map.removeControl(routingControl);
+        routingControl = null;
     }
 
     try {
+        console.log('🗺️ [ROUTING] Creating routing control...');
         routingControl = L.Routing.control({
             waypoints: [
                 L.latLng(start.lat, start.lng),
@@ -121,22 +254,47 @@ function calculateRoute(start, end) {
         }).addTo(map);
 
         routingControl.on('routesfound', function (e) {
+            console.log('✅ [ROUTING] Route found!');
             const routes = e.routes;
+            if (!routes || routes.length === 0) {
+                console.error('❌ [ROUTING] No routes in response');
+                return;
+            }
+            
             const summary = routes[0].summary;
+            if (!summary) {
+                console.error('❌ [ROUTING] No summary in route');
+                return;
+            }
+            
             const distKm = (summary.totalDistance / 1000).toFixed(1);
             const timeMins = Math.round(summary.totalTime / 60);
+            
+            console.log(`📏 [ROUTING] Distance: ${distKm} km`);
+            console.log(`⏱️ [ROUTING] Time: ${timeMins} minutes`);
+            console.log(`📍 [ROUTING] Waypoints: ${routes[0].coordinates.length} points`);
 
             speak(`Route found. Distance: ${distKm} kilometers. Time: ${timeMins} minutes.`);
+            
+            // Fetch POIs for destination
+            console.log('🏛️ [POI] Fetching points of interest for destination...');
             fetchPOIs(end.lat, end.lng);
         });
 
         routingControl.on('routingerror', function (e) {
-            console.error("Routing Error:", e);
+            console.error('❌ [ROUTING] Routing Error:', e);
+            console.error('❌ [ROUTING] Error Details:', {
+                message: e.error?.message,
+                code: e.error?.code,
+                status: e.error?.status
+            });
             speak("Sorry, I couldn't calculate a route.");
         });
 
     } catch (e) {
-        console.error("Leaflet Routing Machine Error:", e);
+        console.error('❌ [ROUTING] Leaflet Routing Machine Error:', e);
+        console.error('❌ [ROUTING] Error Stack:', e.stack);
+        speak("Sorry, I couldn't calculate a route.");
     }
 }
 
@@ -210,11 +368,18 @@ async function startExperience() {
 
             const coords = await geocode(transcript);
             if (!coords) {
+                console.error(`❌ [VOICE] Could not geocode start location: ${transcript}`);
                 speak("I couldn't find that place. Let's try again.");
                 setTimeout(startExperience, 2000);
                 return;
             }
             startCoords = coords;
+            console.log(`✅ [VOICE] Start coordinates resolved:`, startCoords);
+            
+            // Update map to show start location
+            if (map) {
+                map.setView([coords.lat, coords.lng], DEFAULT_ZOOM);
+            }
 
             // Step 2: Destination
             voiceStatus.textContent = "Say your destination...";
@@ -225,11 +390,18 @@ async function startExperience() {
 
                     const destCoords = await geocode(destTranscript);
                     if (!destCoords) {
+                        console.error(`❌ [VOICE] Could not geocode destination: ${destTranscript}`);
                         speak("I couldn't find the destination. Please try again.");
                         voiceOverlay.classList.add('hidden');
                         return;
                     }
                     endCoords = destCoords;
+                    console.log(`✅ [VOICE] End coordinates resolved:`, endCoords);
+                    
+                    // Update map to show end location
+                    if (map) {
+                        map.setView([destCoords.lat, destCoords.lng], DEFAULT_ZOOM);
+                    }
 
                     // Step 3: Calculate Route
                     voiceStatus.textContent = "Calculating route...";
@@ -242,21 +414,48 @@ async function startExperience() {
 }
 
 async function handleManualInput(type, value) {
-    if (!value) return;
-    const coords = await geocode(value);
-    if (!coords) {
-        alert(`Could not find location: ${value}`);
+    if (!value || !value.trim()) {
+        console.warn('⚠️ Empty input for', type);
         return;
     }
+
+    console.log(`\n📍 [MANUAL INPUT] ${type.toUpperCase()}: "${value}"`);
+    const coords = await geocode(value);
+    
+    if (!coords) {
+        const errorMsg = `I could not find the location: ${value}`;
+        console.error(`❌ [MANUAL INPUT] ${errorMsg}`);
+        alert(errorMsg + '\n\nPlease check:\n- Location name spelling\n- Try a more specific location\n- API key is configured correctly');
+        return;
+    }
+
     if (type === 'start') {
         startCoords = coords;
+        console.log(`✅ [MANUAL INPUT] Start coordinates set:`, startCoords);
         speak(`Start set to ${value}`);
+        
+        // Update map view to start location
+        if (map) {
+            map.setView([coords.lat, coords.lng], DEFAULT_ZOOM);
+            console.log(`🗺️ [MAP] View updated to start location`);
+        }
     } else {
         endCoords = coords;
+        console.log(`✅ [MANUAL INPUT] End coordinates set:`, endCoords);
         speak(`Destination set to ${value}`);
+        
+        // Update map view to end location
+        if (map) {
+            map.setView([coords.lat, coords.lng], DEFAULT_ZOOM);
+            console.log(`🗺️ [MAP] View updated to end location`);
+        }
     }
+    
     if (startCoords && endCoords) {
+        console.log(`\n🚗 [ROUTING] Calculating route from start to end...`);
         calculateRoute(startCoords, endCoords);
+    } else {
+        console.log(`⏳ [ROUTING] Waiting for ${!startCoords ? 'start' : 'end'} location...`);
     }
 }
 
@@ -289,6 +488,37 @@ function initMap() {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
+    // Validate API keys on startup
+    console.log('\n🔧 [INIT] Initializing application...');
+    const apiKeyValid = validateApiKeys();
+    
+    if (!apiKeyValid) {
+        // Show user-friendly error in UI
+        const errorDiv = document.createElement('div');
+        errorDiv.style.cssText = 'position: fixed; top: 10px; left: 50%; transform: translateX(-50%); background: #ff4444; color: white; padding: 15px 20px; border-radius: 8px; z-index: 10000; max-width: 500px; text-align: center;';
+        errorDiv.innerHTML = `
+            <strong>⚠️ API Key Not Configured</strong><br>
+            Please set your OpenCage API key:<br>
+            <input type="text" id="api-key-input" placeholder="Enter OpenCage API Key" style="margin: 10px 0; padding: 8px; width: 300px; border-radius: 4px; border: none;">
+            <br>
+            <button onclick="
+                const key = document.getElementById('api-key-input').value.trim();
+                if (key) {
+                    localStorage.setItem('OPENCAGE_API_KEY', key);
+                    window.location.reload();
+                } else {
+                    alert('Please enter a valid API key');
+                }
+            " style="padding: 8px 16px; background: white; color: #ff4444; border: none; border-radius: 4px; cursor: pointer; font-weight: bold;">
+                Save & Reload
+            </button>
+            <br><small style="display: block; margin-top: 10px;">
+                Get your key from: <a href="https://opencagedata.com/api" target="_blank" style="color: white;">opencagedata.com/api</a>
+            </small>
+        `;
+        document.body.appendChild(errorDiv);
+    }
+
     initMap();
 
     if (btnStartExperience) {
