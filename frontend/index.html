@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Navigation Agent</title>
+
+    <!-- Leaflet CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+        integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
+
+    <!-- Leaflet Routing Machine CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet-routing-machine@latest/dist/leaflet-routing-machine.css" />
+
+    <!-- Custom CSS -->
+    <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+    <div class="app-container">
+        <header>
+            <h1>AI Voice Navigator</h1>
+        </header>
+
+        <main>
+            <div id="voice-overlay" class="voice-overlay hidden">
+                <div class="voice-content">
+                    <div class="voice-waves">
+                        <span></span><span></span><span></span><span></span><span></span>
+                    </div>
+                    <p id="voice-status">Tap to Start...</p>
+                    <button id="btn-close-overlay"
+                        style="margin-top: 20px; padding: 8px 16px; background: transparent; border: 1px solid white; color: white; border-radius: 20px; cursor: pointer;">Close</button>
+                </div>
+            </div>
+
+            <div class="controls-container">
+                <button id="btn-start-experience" class="action-btn primary-pulse">
+                    🎙️ Start Voice Navigation
+                </button>
+
+                <div id="manual-controls" class="hidden">
+                    <div class="input-group">
+                        <input type="text" id="input-start" placeholder="Start Location (Type or Speak)">
+                    </div>
+                    <div class="input-group">
+                        <input type="text" id="input-end" placeholder="Destination (Type or Speak)">
+                    </div>
+                </div>
+            </div>
+
+            <div id="map"></div>
+
+            <div id="poi-container" class="poi-container hidden">
+                <h3>Nearby Attractions</h3>
+                <div id="poi-list" class="poi-list">
+                    <!-- POI Cards will be injected here -->
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Leaflet JS -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+        integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+
+    <!-- Leaflet Routing Machine JS -->
+    <script src="https://unpkg.com/leaflet-routing-machine@latest/dist/leaflet-routing-machine.js"></script>
+
+    <!-- App JS -->
+    <script src="app.js"></script>
+</body>
+
+</html>

@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>API Key Tester</title>
+    <style>
+        body {
+            font-family: sans-serif;
+            padding: 2rem;
+            max-width: 600px;
+            margin: 0 auto;
+        }
+
+        .group {
+            margin-bottom: 1.5rem;
+            padding: 1rem;
+            border: 1px solid #ccc;
+            border-radius: 8px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 0.5rem;
+            font-weight: bold;
+        }
+
+        input {
+            width: 100%;
+            padding: 0.5rem;
+            margin-bottom: 0.5rem;
+        }
+
+        button {
+            padding: 0.5rem 1rem;
+            background: #2563eb;
+            color: white;
+            border: none;
+            cursor: pointer;
+        }
+
+        button:hover {
+            background: #1d4ed8;
+        }
+
+        .result {
+            margin-top: 0.5rem;
+            font-family: monospace;
+        }
+
+        .success {
+            color: green;
+        }
+
+        .error {
+            color: red;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>API Key Tester</h1>
+    <p>Enter your keys to verify they work before using the app.</p>
+
+    <div class="group">
+        <label>OpenCage API Key (Geocoding)</label>
+        <input type="text" id="key-opencage" placeholder="Enter OpenCage Key">
+        <button onclick="testOpenCage()">Test OpenCage</button>
+        <div id="res-opencage" class="result"></div>
+    </div>
+
+    <div class="group">
+        <label>OpenTripMap API Key (POIs)</label>
+        <input type="text" id="key-opentrip" placeholder="Enter OpenTripMap Key">
+        <button onclick="testOpenTrip()">Test OpenTripMap</button>
+        <div id="res-opentrip" class="result"></div>
+    </div>
+
+    <script>
+        async function testOpenCage() {
+            const key = document.getElementById('key-opencage').value.trim();
+            const resDiv = document.getElementById('res-opencage');
+            if (!key) { resDiv.textContent = 'Please enter a key.'; return; }
+
+            resDiv.textContent = 'Testing...';
+            try {
+                const url = `https://api.opencagedata.com/geocode/v1/json?q=Chennai&key=${key}&limit=1`;
+                const res = await fetch(url);
+                const data = await res.json();
+
+                if (res.ok && data.status.code === 200) {
+                    resDiv.innerHTML = '<span class="success">✅ Success! API is working.</span>';
+                } else {
+                    resDiv.innerHTML = `<span class="error">❌ Error: ${data.status.message || res.statusText}</span>`;
+                }
+            } catch (e) {
+                resDiv.innerHTML = `<span class="error">❌ Network Error: ${e.message}</span>`;
+            }
+        }
+
+        async function testOpenTrip() {
+            const key = document.getElementById('key-opentrip').value.trim();
+            const resDiv = document.getElementById('res-opentrip');
+            if (!key) { resDiv.textContent = 'Please enter a key.'; return; }
+
+            resDiv.textContent = 'Testing...';
+            try {
+                const url = `https://api.opentripmap.com/0.1/en/places/radius?radius=1000&lon=80.2707&lat=13.0827&apikey=${key}`;
+                const res = await fetch(url);
+
+                if (res.ok) {
+                    resDiv.innerHTML = '<span class="success">✅ Success! API is working.</span>';
+                } else {
+                    resDiv.innerHTML = `<span class="error">❌ Error: ${res.status} ${res.statusText}</span>`;
+                }
+            } catch (e) {
+                resDiv.innerHTML = `<span class="error">❌ Network Error: ${e.message}</span>`;
+            }
+        }
+    </script>
+</body>
+
+</html>
