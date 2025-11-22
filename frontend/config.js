@@ -18,9 +18,20 @@ const getApiKey = () => {
     return 'YOUR_KEY';
 };
 
+// Backend URL - adjust if your backend runs on a different port
+const getBackendUrl = () => {
+    // Try to get from window (if set via script tag)
+    if (window.BACKEND_URL) {
+        return window.BACKEND_URL;
+    }
+    // Default to localhost:5000 (common backend port)
+    return 'http://localhost:5000';
+};
+
 // Export API keys
 window.API_CONFIG = {
-    OPENCAGE_API_KEY: getApiKey(),
-    OPENTRIPMAP_API_KEY: localStorage.getItem('OPENTRIPMAP_API_KEY') || 'YOUR_KEY'
+    OPENCAGE_API_KEY: getApiKey() !== 'YOUR_KEY' ? getApiKey() : 'e6c88f834e984192afc0bdd2561e29d2',
+    OPENTRIPMAP_API_KEY: localStorage.getItem('OPENTRIPMAP_API_KEY') || '5ae2e3f221c38a28845f05b67cd27b2e6b81540ed9d5732bf1d042f9',
+    BACKEND_URL: getBackendUrl()
 };
 

@@ -29,6 +29,7 @@ let routingControl;
 let startCoords = null;
 let endCoords = null;
 let isListening = false;
+let attractionsLayerGroup = null; // Layer group for attraction markers
 
 // DOM Elements
 const btnStartExperience = document.getElementById('btn-start-experience');
@@ -279,6 +280,10 @@ function calculateRoute(start, end) {
             // Fetch POIs for destination
             console.log('🏛️ [POI] Fetching points of interest for destination...');
             fetchPOIs(end.lat, end.lng);
+            
+            // Fetch attractions for destination (SerpAPI)
+            console.log('🎯 [ATTRACTIONS] Fetching attractions for destination...');
+            fetchAttractions(end.lat, end.lng);
         });
 
         routingControl.on('routingerror', function (e) {
@@ -309,9 +314,25 @@ async function fetchPOIs(lat, lon) {
         const url = `https://api.opentripmap.com/0.1/en/places/radius?radius=${radius}&lon=${lon}&lat=${lat}&kinds=tourist_facilities,interesting_places&rate=2&format=json&limit=5&apikey=${OPENTRIPMAP_API_KEY}`;
 
         const res = await fetch(url);
+        
+        if (!res.ok) {
+            if (res.status === 401) {
+                console.error("❌ [POI] API Key Unauthorized. Check OPENTRIPMAP_API_KEY.");
+                poiList.innerHTML = '<p>API Key Error (401). Check console.</p>';
+                return;
+            }
+            throw new Error(`POI API Error: ${res.status}`);
+        }
+
         const places = await res.json();
 
         poiList.innerHTML = '';
+
+        if (!Array.isArray(places)) {
+             console.error("❌ [POI] Invalid response format:", places);
+             poiList.innerHTML = '<p>Error loading places.</p>';
+             return;
+        }
 
         if (places.length === 0) {
             poiList.innerHTML = '<p>No popular places found nearby.</p>';
@@ -321,9 +342,11 @@ async function fetchPOIs(lat, lon) {
         for (const place of places) {
             const detailsUrl = `https://api.opentripmap.com/0.1/en/places/xid/${place.xid}?apikey=${OPENTRIPMAP_API_KEY}`;
             const detailsRes = await fetch(detailsUrl);
-            const details = await detailsRes.json();
-            createPOICard(details);
-            addPOIMarker(details);
+            if (detailsRes.ok) {
+                const details = await detailsRes.json();
+                createPOICard(details);
+                addPOIMarker(details);
+            }
         }
 
     } catch (err) {
@@ -350,6 +373,149 @@ function addPOIMarker(place) {
     L.marker([place.point.lat, place.point.lon])
         .addTo(map)
         .bindPopup(`<b>${place.name}</b><br>${place.kinds.split(',')[0]}`);
+}
+
+// --- Attractions (SerpAPI) ---
+
+async function fetchAttractions(lat, lon) {
+    console.log(`\n🏛️ [ATTRACTIONS] Fetching attractions for coordinates: [${lat}, ${lon}]`);
+    
+    try {
+        const backendUrl = (window.API_CONFIG && window.API_CONFIG.BACKEND_URL) || 'http://localhost:5000';
+        const url = `${backendUrl}/api/attractions?lat=${lat}&lon=${lon}`;
+        
+        console.log(`📡 [ATTRACTIONS] Fetching from: ${url}`);
+        
+        const res = await fetch(url);
+        
+        if (!res.ok) {
+            const errorData = await res.json().catch(() => ({ error: 'Unknown error' }));
+            console.error(`❌ [ATTRACTIONS] HTTP Error: ${res.status}`, errorData);
+            return;
+        }
+        
+        const data = await res.json();
+        
+        if (data.status !== 'ok') {
+            console.error(`❌ [ATTRACTIONS] API Error:`, data.error || data.message);
+            return;
+        }
+        
+        if (!data.attractions || data.attractions.length === 0) {
+            console.log(`⚠️ [ATTRACTIONS] No attractions found`);
+            return;
+        }
+        
+        console.log(`✅ [ATTRACTIONS] Found ${data.attractions.length} attractions`);
+        
+        // Display attractions
+        displayAttractions(data.attractions);
+        
+        // Add attraction markers to map
+        addAttractionMarkers(data.attractions);
+        
+    } catch (err) {
+        console.error("❌ [ATTRACTIONS] Error:", err);
+        console.error("❌ [ATTRACTIONS] Error details:", err.message);
+    }
+}
+
+function displayAttractions(attractions) {
+    // Create or get attractions container
+    let attractionsContainer = document.getElementById('attractions-container');
+    let attractionsList = document.getElementById('attractions-list');
+    
+    if (!attractionsContainer) {
+        // Create attractions container if it doesn't exist
+        attractionsContainer = document.createElement('div');
+        attractionsContainer.id = 'attractions-container';
+        attractionsContainer.className = 'poi-container';
+        attractionsContainer.innerHTML = `
+            <h3>Nearby Attractions (SerpAPI)</h3>
+            <div id="attractions-list" class="poi-list"></div>
+        `;
+        
+        // Insert after POI container or at the end of main
+        const main = document.querySelector('main');
+        if (main) {
+            main.appendChild(attractionsContainer);
+        }
+        attractionsList = document.getElementById('attractions-list');
+    }
+    
+    // Show container
+    attractionsContainer.classList.remove('hidden');
+    
+    // Clear existing content
+    if (attractionsList) {
+        attractionsList.innerHTML = '';
+        
+        // Add each attraction
+        attractions.forEach(attraction => {
+            const card = document.createElement('div');
+            card.className = 'poi-card';
+            
+            const imgUrl = attraction.photos && attraction.photos.length > 0 
+                ? attraction.photos[0] 
+                : 'https://via.placeholder.com/200x120?text=No+Image';
+            
+            const ratingHtml = attraction.rating 
+                ? `<div class="poi-rating">⭐ ${attraction.rating}${attraction.reviews ? ` (${attraction.reviews} reviews)` : ''}</div>` 
+                : '';
+            
+            card.innerHTML = `
+                <img src="${imgUrl}" class="poi-image" alt="${attraction.name}" onerror="this.src='https://via.placeholder.com/200x120?text=No+Image'">
+                <div class="poi-details">
+                    <div class="poi-name">${attraction.name}</div>
+                    <div class="poi-category">${attraction.address}</div>
+                    ${ratingHtml}
+                </div>
+            `;
+            
+            attractionsList.appendChild(card);
+        });
+    }
+}
+
+function addAttractionMarkers(attractions) {
+    // Remove existing attraction markers
+    if (attractionsLayerGroup) {
+        map.removeLayer(attractionsLayerGroup);
+    }
+    
+    // Create new layer group
+    attractionsLayerGroup = L.layerGroup();
+    
+    // Add markers for attractions with coordinates
+    attractions.forEach(attraction => {
+        if (attraction.coordinates && attraction.coordinates.lat && attraction.coordinates.lon) {
+            const marker = L.marker([attraction.coordinates.lat, attraction.coordinates.lon], {
+                icon: L.icon({
+                    iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-red.png',
+                    shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png',
+                    iconSize: [25, 41],
+                    iconAnchor: [12, 41],
+                    popupAnchor: [1, -34],
+                    shadowSize: [41, 41]
+                })
+            });
+            
+            const ratingText = attraction.rating ? `⭐ ${attraction.rating}` : '';
+            marker.bindPopup(`
+                <b>${attraction.name}</b><br>
+                ${attraction.address}<br>
+                ${ratingText}
+            `);
+            
+            attractionsLayerGroup.addLayer(marker);
+        }
+    });
+    
+    // Add layer group to map
+    if (attractionsLayerGroup.getLayers().length > 0) {
+        attractionsLayerGroup.addTo(map);
+        console.log(`✅ [ATTRACTIONS] Added ${attractionsLayerGroup.getLayers().length} attraction markers to map`);
+    }
 }
 
 // --- Main Flow ---
@@ -454,6 +620,9 @@ async function handleManualInput(type, value) {
     if (startCoords && endCoords) {
         console.log(`\n🚗 [ROUTING] Calculating route from start to end...`);
         calculateRoute(startCoords, endCoords);
+        
+        // Fetch attractions for destination after route is calculated
+        // (fetchAttractions will be called from calculateRoute's routesfound event)
     } else {
         console.log(`⏳ [ROUTING] Waiting for ${!startCoords ? 'start' : 'end'} location...`);
     }
